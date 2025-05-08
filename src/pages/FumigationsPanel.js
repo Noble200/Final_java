@@ -94,6 +94,7 @@ const FumigationsPanel = () => {
   const [currentProduct, setCurrentProduct] = useState({
     product_id: '',
     warehouse_id: '',
+    warehouseFilter: '', // Nuevo campo para filtrar por almacén
     dose_per_ha: '',
     dose_unit: 'cc/ha',
     total_quantity: '',
@@ -400,12 +401,13 @@ const FumigationsPanel = () => {
     setCurrentProduct({
       product_id: '',
       warehouse_id: '',
+      warehouseFilter: currentProduct.warehouseFilter,
       dose_per_ha: '',
       dose_unit: 'cc/ha',
       total_quantity: '',
       total_unit: 'Lts'
     });
-  };
+    };
   
   // Manejar cambios en el formulario principal
   const handleInputChange = (e) => {
@@ -428,27 +430,27 @@ const FumigationsPanel = () => {
   const handleProductInputChange = (e) => {
     const { name, value } = e.target;
     
-    // Si es el producto, preseleccionar la unidad según el producto
-    if (name === 'product_id' && value) {
-      const selectedProduct = products.find(p => p.id === value);
-      if (selectedProduct) {
-        setCurrentProduct(prev => ({
-          ...prev,
-          [name]: value,
-          total_unit: selectedProduct.unitOfMeasure || 'Lts'
-        }));
-        return;
-      }
+    // Si cambia el filtro de almacén, limpiar producto y almacén seleccionados
+    if (name === 'warehouseFilter') {
+      setCurrentProduct(prev => ({
+        ...prev,
+        warehouseFilter: value,
+        product_id: '',  // Limpiar producto seleccionado
+        dose_per_ha: '',
+        total_quantity: ''
+      }));
+      return;
     }
     
+    // Para otros campos, actualizar normalmente
     setCurrentProduct(prev => ({
       ...prev,
       [name]: value
     }));
     
-    // Calcular cantidad total si cambia dosis o superficie
-    if ((name === 'dose_per_ha' || name === 'dose_unit') && currentFumigation.surface) {
-      calculateTotalQuantity(value, name === 'dose_per_ha' ? value : currentProduct.dose_per_ha);
+    // Calcular cantidad total si cambia dosis
+    if (name === 'dose_per_ha' && value && currentFumigation.surface) {
+      calculateTotalQuantity(null, value);
     }
   };
   
@@ -458,10 +460,25 @@ const FumigationsPanel = () => {
     const dose = doseValue || currentProduct.dose_per_ha;
     
     if (surface && dose && !isNaN(surface) && !isNaN(dose)) {
-      const total = parseFloat(surface) * parseFloat(dose);
+      let total = parseFloat(surface) * parseFloat(dose);
+      let unit = currentProduct.dose_unit;
+      
+      // Convertir según la unidad
+      // Si la dosis está en cc/ha y queremos el total en Lts
+      if (unit === 'cc/ha') {
+        total = total / 1000; // cc a litros
+        unit = 'Lts';
+      }
+      // Si la dosis está en g/ha y queremos el total en Kg
+      else if (unit === 'g/ha') {
+        total = total / 1000; // g a kg
+        unit = 'Kg';
+      }
+      
       setCurrentProduct(prev => ({
         ...prev,
-        total_quantity: total.toFixed(2)
+        total_quantity: total.toFixed(2),
+        total_unit: unit
       }));
     }
   };
@@ -504,11 +521,6 @@ const FumigationsPanel = () => {
       return;
     }
     
-    if (!currentProduct.warehouse_id) {
-      setFormError('Seleccione un almacén');
-      return;
-    }
-    
     if (!currentProduct.dose_per_ha || isNaN(currentProduct.dose_per_ha)) {
       setFormError('Ingrese una dosis válida');
       return;
@@ -521,28 +533,56 @@ const FumigationsPanel = () => {
     
     // Verificar disponibilidad en stock
     const selectedProduct = products.find(p => p.id === currentProduct.product_id);
-    const warehouse = warehouses.find(w => w.id === currentProduct.warehouse_id);
     
-    if (selectedProduct && warehouse) {
-      const warehouseStock = selectedProduct.warehouseStock?.[currentProduct.warehouse_id] || 0;
-      
-      if (parseFloat(currentProduct.total_quantity) > warehouseStock) {
-        setFormError(`Stock insuficiente de ${selectedProduct.name} en ${warehouse.name}. Disponible: ${warehouseStock} ${selectedProduct.unitOfMeasure}`);
-        return;
+    if (selectedProduct) {
+      // Si hay un warehouse_id seleccionado, verificar stock de ese almacén
+      if (currentProduct.warehouse_id) {
+        const warehouseStock = selectedProduct.warehouseStock?.[currentProduct.warehouse_id] || 0;
+        
+        if (parseFloat(currentProduct.total_quantity) > warehouseStock) {
+          setFormError(`Stock insuficiente de ${selectedProduct.name} en el almacén seleccionado. Disponible: ${warehouseStock} ${selectedProduct.unitOfMeasure}`);
+          return;
+        }
+        
+        const warehouse = warehouses.find(w => w.id === currentProduct.warehouse_id);
+        
+        // Agregar producto con almacén específico
+        const productToAdd = {
+          ...currentProduct,
+          id: uuidv4(), // ID temporal para el formulario
+          product_name: selectedProduct.name,
+          warehouse_name: warehouse ? warehouse.name : 'No especificado'
+        };
+        
+        setCurrentFumigation(prev => ({
+          ...prev,
+          products: [...prev.products, productToAdd]
+        }));
+        
+      } else {
+        // Si no hay almacén seleccionado, usar el stock total
+        const totalStock = Object.values(selectedProduct.warehouseStock || {}).reduce(
+          (sum, qty) => sum + qty, 0
+        );
+        
+        if (parseFloat(currentProduct.total_quantity) > totalStock) {
+          setFormError(`Stock insuficiente de ${selectedProduct.name}. Disponible total: ${totalStock} ${selectedProduct.unitOfMeasure}`);
+          return;
+        }
+        
+        // Agregar producto sin almacén específico
+        const productToAdd = {
+          ...currentProduct,
+          id: uuidv4(), // ID temporal para el formulario
+          product_name: selectedProduct.name,
+          warehouse_name: 'No especificado' // Opcional, puedes eliminarlo si prefieres
+        };
+        
+        setCurrentFumigation(prev => ({
+          ...prev,
+          products: [...prev.products, productToAdd]
+        }));
       }
-      
-      // Agregar producto con detalles completos
-      const productToAdd = {
-        ...currentProduct,
-        id: uuidv4(), // ID temporal para el formulario
-        product_name: selectedProduct.name,
-        warehouse_name: warehouse.name
-      };
-      
-      setCurrentFumigation(prev => ({
-        ...prev,
-        products: [...prev.products, productToAdd]
-      }));
       
       // Limpiar formulario de producto
       resetCurrentProduct();
@@ -724,7 +764,7 @@ const FumigationsPanel = () => {
       const productsToInsert = currentFumigation.products.map(product => ({
         fumigation_id: fumigationId,
         product_id: product.product_id,
-        warehouse_id: product.warehouse_id,
+        warehouse_id: product.warehouse_id || null,
         dose_per_ha: parseFloat(product.dose_per_ha),
         dose_unit: product.dose_unit,
         total_quantity: parseFloat(product.total_quantity),

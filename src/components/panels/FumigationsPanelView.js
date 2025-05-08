@@ -579,24 +579,16 @@ const FumigationsPanelView = ({
             
             {/* Segunda fila: Información del cultivo */}
             <Grid item xs={12} md={4}>
-              <FormControl fullWidth required>
-                <InputLabel id="crop-label" sx={{ backgroundColor: 'white', px: 0.5 }}>
-                  Cultivo
-                </InputLabel>
-                <Select
-                  labelId="crop-label"
-                  name="crop"
-                  value={currentFumigation.crop || ''}
-                  label="Cultivo"
-                  onChange={onInputChange}
-                >
-                  {cropTypes.map((crop) => (
-                    <MenuItem key={crop} value={crop}>
-                      {crop}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                name="crop"
+                label="Cultivo"
+                variant="outlined"
+                fullWidth
+                required
+                value={currentFumigation.crop || ''}
+                onChange={onInputChange}
+                placeholder="Ingrese el cultivo"
+              />
             </Grid>
             
             <Grid item xs={12} md={4}>
@@ -625,7 +617,7 @@ const FumigationsPanelView = ({
               />
             </Grid>
             
-            {/* Sección de productos */}
+            {/* Sección de productos - SOLO UNA VEZ */}
             <Grid item xs={12}>
               <Divider textAlign="left" sx={{ mt: 1, mb: 2 }}>
                 <Typography variant="subtitle1" color="primary" fontWeight="medium">
@@ -633,136 +625,132 @@ const FumigationsPanelView = ({
                 </Typography>
               </Divider>
             </Grid>
-            
-            {/* Formulario para agregar productos */}
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth required>
-                <InputLabel id="product-label" sx={{ backgroundColor: 'white', px: 0.5 }}>
-                  Producto
+
+            {/* Filtro por almacén */}
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="warehouse-filter-products-label">
+                  Filtrar productos por almacén
                 </InputLabel>
                 <Select
-                  labelId="product-label"
-                  name="product_id"
-                  value={currentProduct.product_id || ''}
-                  label="Producto"
+                  labelId="warehouse-filter-products-label"
+                  name="warehouseFilter"
+                  value={currentProduct.warehouseFilter || ''}
+                  label="Filtrar productos por almacén"
                   onChange={onProductInputChange}
-                  disabled={!currentFumigation.surface}
                 >
-                  <MenuItem value="" disabled>
-                    Seleccione un producto
-                  </MenuItem>
-                  {products.map((product) => (
-                    <MenuItem key={product.id} value={product.id}>
-                      {product.name}
+                  <MenuItem value="">Todos los almacenes</MenuItem>
+                  {warehouses.map((warehouse) => (
+                    <MenuItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
-            
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth required>
-                <InputLabel id="warehouse-label" sx={{ backgroundColor: 'white', px: 0.5 }}>
-                  Almacén
-                </InputLabel>
-                <Select
-                  labelId="warehouse-label"
-                  name="warehouse_id"
-                  value={currentProduct.warehouse_id || ''}
-                  label="Almacén"
+
+            {/* Producto, dosis y cantidad */}
+            <Grid item xs={12} container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel id="product-label">Producto</InputLabel>
+                  <Select
+                    labelId="product-label"
+                    name="product_id"
+                    value={currentProduct.product_id || ''}
+                    label="Producto"
+                    onChange={onProductInputChange}
+                  >
+                    <MenuItem value="" disabled>Seleccione un producto</MenuItem>
+                    {products
+                      .filter(product => {
+                        // Si hay un filtro de almacén, mostrar solo productos de ese almacén con stock
+                        if (currentProduct.warehouseFilter) {
+                          const warehouseStock = product.warehouseStock?.[currentProduct.warehouseFilter] || 0;
+                          return warehouseStock > 0;
+                        }
+                        // Si no hay filtro, mostrar todos los productos con stock
+                        const totalStock = Object.values(product.warehouseStock || {}).reduce(
+                          (sum, qty) => sum + qty, 0
+                        );
+                        return totalStock > 0;
+                      })
+                      .map((product) => (
+                        <MenuItem key={product.id} value={product.id}>
+                          {product.name} - Stock: {
+                            currentProduct.warehouseFilter 
+                              ? (product.warehouseStock?.[currentProduct.warehouseFilter] || 0)
+                              : Object.values(product.warehouseStock || {}).reduce((sum, qty) => sum + qty, 0)
+                          } {product.unitOfMeasure}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={3}>
+                <TextField
+                  name="dose_per_ha"
+                  label="Dosis por ha"
+                  type="number"
+                  variant="outlined"
+                  fullWidth
+                  value={currentProduct.dose_per_ha || ''}
                   onChange={onProductInputChange}
-                  disabled={!currentProduct.product_id}
-                >
-                  <MenuItem value="" disabled>
-                    Seleccione un almacén
-                  </MenuItem>
-                  {warehouses.map((warehouse) => {
-                    // Solo mostrar almacenes que tengan stock del producto seleccionado
-                    const product = products.find(p => p.id === currentProduct.product_id);
-                    if (!product) return null;
-                    
-                    const stock = product.warehouseStock?.[warehouse.id] || 0;
-                    if (stock <= 0) return null;
-                    
-                    return (
-                      <MenuItem key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name} (Stock: {stock} {product.unitOfMeasure})
+                  inputProps={{ min: 0, step: 0.01 }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel id="dose-unit-label">Unidad</InputLabel>
+                  <Select
+                    labelId="dose-unit-label"
+                    name="dose_unit"
+                    value={currentProduct.dose_unit || 'cc/ha'}
+                    label="Unidad"
+                    onChange={onProductInputChange}
+                  >
+                    {doseUnits.map((unit) => (
+                      <MenuItem key={unit} value={unit}>
+                        {unit}
                       </MenuItem>
-                    );
-                  })}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={2}>
-              <TextField
-                name="dose_per_ha"
-                label="Dosis por ha"
-                type="number"
-                variant="outlined"
-                fullWidth
-                required
-                value={currentProduct.dose_per_ha || ''}
-                onChange={onProductInputChange}
-                disabled={!currentProduct.warehouse_id}
-                inputProps={{ min: 0, step: 0.01 }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={1}>
-              <FormControl fullWidth required>
-                <InputLabel id="dose-unit-label" sx={{ backgroundColor: 'white', px: 0.5 }}>
-                  Unidad
-                </InputLabel>
-                <Select
-                  labelId="dose-unit-label"
-                  name="dose_unit"
-                  value={currentProduct.dose_unit || 'cc/ha'}
-                  label="Unidad"
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={2}>
+                <TextField
+                  name="total_quantity"
+                  label="Cantidad Total"
+                  type="number"
+                  variant="outlined"
+                  fullWidth
+                  value={currentProduct.total_quantity || ''}
                   onChange={onProductInputChange}
-                  disabled={!currentProduct.warehouse_id}
+                  disabled={true}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        {currentProduct.total_unit}
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={onAddProduct}
+                  startIcon={<AddIcon />}
+                  disabled={!currentProduct.product_id || !currentProduct.dose_per_ha || !currentProduct.total_quantity}
                 >
-                  {doseUnits.map((unit) => (
-                    <MenuItem key={unit} value={unit}>
-                      {unit}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={2}>
-              <TextField
-                name="total_quantity"
-                label="Cantidad Total"
-                type="number"
-                variant="outlined"
-                fullWidth
-                required
-                value={currentProduct.total_quantity || ''}
-                onChange={onProductInputChange}
-                disabled={!currentProduct.dose_per_ha}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      {currentProduct.total_unit}
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={1}>
-              <Button
-                variant="contained"
-                color="secondary"
-                fullWidth
-                onClick={onAddProduct}
-                disabled={!currentProduct.product_id || !currentProduct.warehouse_id || !currentProduct.dose_per_ha || !currentProduct.total_quantity}
-                sx={{ height: '100%' }}
-              >
-                <AddIcon />
-              </Button>
+                  Añadir Producto
+                </Button>
+              </Grid>
             </Grid>
             
             {/* Tabla de productos agregados */}
