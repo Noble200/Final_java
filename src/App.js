@@ -23,7 +23,6 @@ import PurchasesPanel from './pages/PurchasesPanel';
 import FumigationsPanel from './pages/FumigationsPanel';
 import UsersPanel from './pages/UsersPanel';
 import FieldsPanel from './pages/FieldsPanel';
-import FumigationsPanel from './pages/FumigationsPanel';
 import WarehousesPanel from './pages/WarehousesPanel';
 import ReportsPanel from './pages/ReportsPanel';
 import AppLayout from './components/ui/AppLayout';
