@@ -687,7 +687,8 @@ const FumigationsPanel = () => {
         lot: currentFumigation.lot,
         surface: parseFloat(currentFumigation.surface),
         observations: currentFumigation.observations,
-        status: currentFumigation.status
+        status: currentFumigation.status,
+        products: JSON.stringify(currentFumigation.products || [])
       };
       
       let fumigationId;
